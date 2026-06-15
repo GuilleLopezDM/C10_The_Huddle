@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PassPort Inc.</title>
+</head>
+<body>
+
+<h1>PassPort Inc. - Sistema de Autenticacion</h1>
+<p><b>Admin preloaded:</b> admin@passport.com / Admin1234!</p>
+
+<hr>
+
+<h2>Registro</h2>
+<form onsubmit="register(event)">
+  Email: <input type="text" id="regEmail" size="30"><br><br>
+  Password: <input type="password" id="regPassword" size="30"><br><br>
+  <input type="submit" value="Registrar">
+</form>
+
+<hr>
+
+<h2>Login</h2>
+<form onsubmit="login(event)">
+  Email: <input type="text" id="loginEmail" value="admin@passport.com" size="30"><br><br>
+  Password: <input type="password" id="loginPassword" value="Admin1234!" size="30"><br><br>
+  Metodo:
+  <input type="radio" name="authMethod" value="cookie" checked> Cookie (sesion persistente)
+  &nbsp;
+  <input type="radio" name="authMethod" value="jwt"> JWT (sin estado)
+  <br><br>
+  <input type="submit" value="Login">
+</form>
+
+<hr>
+
+<h2>Estado: <span id="statusText">No autenticado</span></h2>
+
+<hr>
+
+<h2>Acciones de Usuario</h2>
+<button onclick="getProfile()">Mi Perfil</button>
+&nbsp;
+<button onclick="logout()">Cerrar Sesion</button>
+
+<br><br>
+
+<div id="adminSection" style="display:none">
+  <hr>
+  <h2>Panel de Administrador</h2>
+  <button onclick="getDashboard()">Dashboard</button>
+  &nbsp;
+  <button onclick="listUsers()">Ver Usuarios</button>
+  &nbsp;
+  <button onclick="getFailedLogins()">Intentos Fallidos</button>
+  <br><br>
+  <div id="userList"></div>
+</div>
+
+<hr>
+
+<h2>Respuesta del servidor:</h2>
+<pre id="output" style="background:#eee; padding:10px; border:1px solid #ccc; min-height:80px;">Esperando...</pre>
+
+<script>
+var token = null;
+var csrfToken = null;
+var authMethod = null;
+var currentUser = null;
+
+function show(data) {
+  document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+}
+
+async function req(method, url, body) {
+  var headers = { "Content-Type": "application/json" };
+  if (authMethod === "jwt" && token) headers["Authorization"] = "Bearer " + token;
+  if (authMethod === "cookie" && csrfToken && method !== "GET") headers["X-CSRF-Token"] = csrfToken;
+  var opts = { method: method, headers: headers, credentials: "include" };
+  if (body) opts.body = JSON.stringify(body);
+  var res = await fetch(url, opts);
+  var data = await res.json();
+  show(data);
+  return { ok: res.ok, data: data };
+}
+
+async function register(e) {
+  e.preventDefault();
+  await req("POST", "/auth/register", {
+    email: document.getElementById("regEmail").value,
+    password: document.getElementById("regPassword").value
+  });
+}
+
+async function login(e) {
+  e.preventDefault();
+  var method = document.querySelector("input[name='authMethod']:checked").value;
+  var r = await req("POST", "/auth/login", {
+    email: document.getElementById("loginEmail").value,
+    password: document.getElementById("loginPassword").value,
+    authMethod: method
+  });
+  if (r.ok) {
+    authMethod = r.data.authMethod;
+    if (r.data.token) token = r.data.token;
+    if (r.data.csrfToken) csrfToken = r.data.csrfToken;
+    currentUser = { email: document.getElementById("loginEmail").value, role: r.data.role };
+    updateStatus();
+  }
+}
+
+async function logout() {
+  await req("POST", "/auth/logout");
+  token = null; csrfToken = null; authMethod = null; currentUser = null;
+  document.getElementById("userList").innerHTML = "";
+  updateStatus();
+}
+
+async function getProfile() { await req("GET", "/user/profile"); }
+
+async function getDashboard() { await req("GET", "/admin/dashboard"); }
+
+async function getFailedLogins() { await req("GET", "/admin/failed-logins"); }
+
+async function listUsers() {
+  var r = await req("GET", "/admin/users");
+  if (r.ok) {
+    var html = "<table border='1' cellpadding='5'><tr><th>Email</th><th>Rol</th><th>ID</th><th>Accion</th></tr>";
+    r.data.users.forEach(function(u) {
+      html += "<tr><td>" + u.email + "</td><td>" + u.role + "</td><td>" + u.id + "</td><td>";
+      if (u.role !== "admin") html += "<button onclick=\"deleteUser('" + u.id + "')\">Eliminar</button>";
+      else html += "(admin)";
+      html += "</td></tr>";
+    });
+    html += "</table>";
+    document.getElementById("userList").innerHTML = html;
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm("Eliminar este usuario?")) return;
+  var r = await req("DELETE", "/admin/users/" + id);
+  if (r.ok) listUsers();
+}
+
+function updateStatus() {
+  var text = currentUser
+    ? "Autenticado como " + currentUser.email + " (" + currentUser.role + ") via " + authMethod
+    : "No autenticado";
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("adminSection").style.display =
+    (currentUser && currentUser.role === "admin") ? "block" : "none";
+}
+
+async function init() {
+  var r = await req("GET", "/auth/status");
+  if (r.ok && r.data.authenticated) {
+    authMethod = r.data.authMethod;
+    currentUser = { email: r.data.email, role: r.data.role };
+    if (authMethod === "cookie") {
+      var cr = await req("GET", "/auth/csrf-token");
+      if (cr.ok) csrfToken = cr.data.csrfToken;
+    }
+    updateStatus();
+  }
+}
+
+init();
+</script>
+
+</body>
+</html>
