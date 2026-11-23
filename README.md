@@ -1,5 +1,7 @@
 # 🔐 PassPort Inc. — Sistema de Autenticación y Sesiones
 
+[![Tests](https://github.com/GuilleLopezDM/C10_The_Huddle/actions/workflows/tests.yml/badge.svg)](https://github.com/GuilleLopezDM/C10_The_Huddle/actions/workflows/tests.yml)
+
 > Challenge 10 · The Huddle · Python + Flask
 
 API de autenticación para una app ficticia de gestión de identidad digital. Implementa los dos modelos de sesión (**cookies con estado** y **JWT sin estado**) y las defensas habituales contra los ataques web más comunes.
@@ -31,6 +33,7 @@ middleware/         # auth, rbac, csrf, rate_limiter
 routes/             # auth_routes, user_routes, admin_routes
 utils/sanitize.py   # Sanitización contra XSS
 templates/          # Frontend HTML mínimo para probar la API
+tests/              # Suite de pytest (18 tests)
 ```
 
 ## 🚀 Cómo ejecutarlo
@@ -45,6 +48,15 @@ python app.py
 Abrí `http://localhost:3000`. Al arrancar se crea un administrador de prueba (`admin@passport.com` / `Admin1234!`).
 
 Variables de entorno opcionales: `JWT_SECRET`, `PORT`, `DEBUG`.
+
+## 🧪 Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+18 tests verifican cada defensa: hashing con bcrypt, cookie `HttpOnly` + `SameSite=Strict`, JWT alterado rechazado, RBAC, CSRF obligatorio con cookies, bloqueo tras 5 intentos fallidos y escapado contra XSS. Corren automáticamente con GitHub Actions en cada push.
 
 ## 📡 Endpoints
 
